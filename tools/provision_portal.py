@@ -60,7 +60,7 @@ PRELOAD_REMOTE = "/data/local/tmp/preload-portal.so"
 HELPER_REMOTE = "/data/local/tmp/libportal_audio_persist.so"
 AUDIO_CTL_LOCAL = ROOT / "exploit/build/portal-audio-ctl.jar"
 AUDIO_CTL_REMOTE = "/data/local/tmp/portal-audio-ctl.jar"
-MHA_TUNING_DEVICE = "/vendor/etc/audio/omni/mha_tuning_blobs.tub"
+MHA_TUNING_DEVICE_TEMPLATE = "/vendor/etc/audio/{hardware}/mha_tuning_blobs.tub"
 MHA_TUNING_STOCK_REMOTE = "/data/local/tmp/portal-mha-tuning-stock.tub"
 MHA_TUNING_PATCHED_REMOTE = "/data/local/tmp/portal-mha-tuning-disabled.tub"
 MHA_TUNING_BACKUP_REMOTE = (
@@ -857,11 +857,28 @@ class PortalProvisioner:
             )
         return local.read_bytes()
 
+    def mha_tuning_device_path(self) -> str:
+        hardware = self.adb_run(
+            ["shell", "getprop", "ro.hardware"], timeout=5, check=True
+        ).stdout.strip()
+        if not hardware:
+            hardware = self.adb_run(
+                ["shell", "getprop", "ro.product.device"], timeout=5,
+                check=True,
+            ).stdout.strip()
+        if not hardware:
+            raise ProvisionError(
+                "Cannot determine audio config directory: "
+                "ro.hardware and ro.product.device are both empty"
+            )
+        return MHA_TUNING_DEVICE_TEMPLATE.format(hardware=hardware)
+
     def prepare_mha_tuning_payloads(self) -> None:
         current_path = self.log_dir / "mha_tuning_blobs.device.tub"
         stock_path = self.log_dir / "mha_tuning_blobs.stock.tub"
         patched_path = self.log_dir / "mha_tuning_blobs.disabled.tub"
-        current = self.pull_file(MHA_TUNING_DEVICE, current_path)
+        mha_tuning_device = self.mha_tuning_device_path()
+        current = self.pull_file(mha_tuning_device, current_path)
         current_hash = sha256(current)
 
         if current_hash == OMNI_STOCK_SHA256:
